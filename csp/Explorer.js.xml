@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="Explorer.js" application="/csp/explorer/" default="1"><![CDATA[
+
+var ikApp = angular.module('ikApp', ['ngSanitize']);
+
+// global params
+var debug = true;
+var pageSize = 50;
+
+ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scope, $filter, $sce) {
+	
+	this.domain = $.urlParam("domain");
+    this.namespace = $.urlParam("namespace");
+	this.mode = 'entities';
+	this.currentEntity = '';
+	this.filter = '';
+    
+    
+    
+    
+    $scope.mainEntities = [];
+    this.getEntities = function(str, forceApply=false) {
+        if ((str == null) || (str == '')) {
+            this.post("/domain/"+this.domain+"/entities", {}, function(data, ctrl) { 
+                $scope.mainEntities = data.entities;
+                if (forceApply) $scope.$apply();
+            });
+        } else {
+            this.post("/domain/"+this.domain+"/entities/similar", { string: str }, function(data) { 
+                $scope.mainEntities = data.entities;
+                if (forceApply) $scope.$apply();
+            });
+        }
+    };
+    
+    $scope.relEntities = [];
+    this.getRelatedEntities = function(ent, forceApply=false) {
+        this.post("/domain/"+this.domain+"/entities/related", { entity: ent }, function(data) {
+            $scope.relEntities = data.entities;
+            if (forceApply) $scope.$apply();
+        });
+    };
+    
+    this.exploreEntity = function(ent, leaveMainEntities=true, forceApply=false) {
+        if (!leaveMainEntities) this.getEntities(ent, forceApply);
+        this.getRelatedEntities(ent, forceApply);
+        this.getSources(ent, forceApply);
+    }
+    
+    
+	this.typeEntity = function(event) {
+		if (event && ((event.keyCode==13) || (event.which==13))) {
+			this.exploreEntity(this.currentEntity, false);
+		}
+	}
+    
+    
+    $scope.sources = [];
+    this.getSources = function(ent, forceApply=false) {
+        var request = { entity: ent, highlight: this.getHighlights() };
+        request.highlight.push({"style": "<b>", "entities": [ent]});
+        this.post("/domain/"+this.domain+"/sources/by/entity", request, function(data) {
+            $scope.sources = data.sources;
+            if (forceApply) $scope.$apply();
+        });
+    };
+    this.showSource = function(srcId) {
+        this.selectedSourceSummarize = 0;
+        this.selectedSourceId = srcId;
+        this.drawSource();
+        $("#modal-source").modal();
+    }
+    this.drawSource = function() {
+        var request = { summarize: this.selectedSourceSummarize, 
+                        highlight: this.getHighlights() };
+        this.post("/domain/"+this.domain+"/sources/"+this.selectedSourceId+"/details", request, function(data) {
+            $scope.selectedSource = data;
+            $scope.$apply();
+        });
+    };
+    $scope.filteredSourceCount = "";
+    this.getSourceCount = function(forceApply=false) {
+        this.post("/domain/"+this.domain+"/sources/count", {}, function(data) {
+            $scope.filteredSourceCount = data.count;
+            if (forceApply) $scope.$apply();
+        }, true);
+    };
+	
+    
+    // utility functions
+    this.getHighlights = function() {
+        return [{"style": "<b>", "entities": [this.currentEntity]}];
+    }
+    
+    this.post = function(path, reqObj, callback, customREST=false) {
+        
+        if (customREST) {
+            var url = "/csp/"+this.namespace+"/exREST"+path;
+        } else {
+            var url = "/api/iKnow/v1/"+this.namespace+path;
+            
+        }
+        
+        // auto-append filter & other params
+        if (!reqObj) reqObj = {};
+        if (this.filter) reqObj.filter = this.filter;
+        reqObj.page = 1;
+        reqObj.pageSize = pageSize;
+        
+        if (debug) console.log("POSTing to "+url, reqObj);
+        
+        $.ajax({
+	  		url: "http://"+location.hostname+":"+location.port+url,
+	  		method: 'POST',
+	  		contentType: 'application/json; charset=UTF-8',
+	  		data: JSON.stringify(reqObj)
+	  	}).done(function(data) {
+            if (debug) console.log("RETURN from POST to "+url, data);
+            callback(data, this);
+        });
+    };
+    
+    
+    
+	
+    // initialization
+	if ((this.domain == null) || (this.domain == '') || (this.domain == undefined)) {
+		alert("No domain specified in URL!");
+		return;
+	}
+    if ((this.namespace == null) || (this.namespace == '') || (this.namespace == undefined)) {
+        this.namespace = location.href.split("/")[4]; // best guess
+        if (debug) console.log("Assuming namespace is '"+this.namespace+"'");
+    }
+    this.getEntities('', true); // init top entities
+    this.getSourceCount(true); // init filtered source count
+    
+    
+}]);
+
+
+
+// utility functions
+$.urlParam = function(name, url) {
+    if (!url) {
+     url = window.location.href;
+    }
+    var results = new RegExp('[\\?&]' + name + '=([^&#]*)').exec(url);
+    if (!results) { 
+        return undefined;
+    }
+    return results[1] || undefined;
+}
+
+// some layout init
+$(document).ready(function() {
+    var totalHeight = 450;
+    $(".ik-resize-full").css("max-height", totalHeight+"px");
+    $(".ik-resize-panel").css("max-height", parseInt(totalHeight/2)+"px");
+});
+]]></CSP>
+</Export>

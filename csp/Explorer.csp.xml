@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<CSP name="Explorer.csp" application="/csp/explorer/" default="1"><![CDATA[
+<html ng-app="ikApp">
+<head>
+
+<title>	iKnow Explorer </title>
+
+<script type="text/javascript" src="nglib/jquery-3.1.0.min.js"></script>
+<script type="text/javascript" src="bootstrap-3-3-5/dist/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="nglib/angular.min.js"></script>
+<script type="text/javascript" src="nglib/angular-resource.min.js"></script>
+<script type="text/javascript" src="nglib/angular-sanitize.min.js"></script> 
+<script type="text/javascript" src="Explorer.js"></script>
+
+<link rel="stylesheet" type="text/css" href="bootstrap-3-3-5/dist/css/bootstrap.min.css" />
+
+<style type="text/css">
+body {
+	padding: 10px;
+}
+
+.glyphicon {
+    cursor: pointer;
+}
+
+.table tbody tr td {
+	padding: 6px;
+}
+
+.panel .table {
+	margin-bottom: 0px;
+	table-layout: fixed;
+}
+
+.panel-sm .table {
+	font-size: small;
+}
+.panel-sm .table tr td {
+	padding: 4px;
+}
+.panel-sm .panel-heading {
+	padding: 5px 10px;
+	font-size: small;
+}
+.panel-sm .panel-body {
+	padding: 5px;
+	font-size: small;
+}
+
+.table td.ik-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>
+
+</head>
+
+<body>
+<div class="container-fluid" ng-controller="iKnowController as ik">
+
+<!-- controls -->
+<div class="row" style="margin-bottom: 10px;">
+
+<div class="col-md-4">
+<div class="input-group">
+<input type="text" class="form-control" ng-model="ik.currentEntity" placeholder="Entity" ng-keyup="ik.typeEntity($event)" />
+<span class="input-group-btn">
+<button class="btn btn-default" ng-click="ik.exploreEntity(ik.currentEntity, false)" >Go!</button>
+</span>
+</div>
+</div>
+
+<div class="col-md-8">
+<button class="btn btn-default">filters <span class="badge">{{filteredSourceCount}}</span></button>
+</div>
+
+</div>
+<!-- end of controls -->
+
+<div class="row">
+
+<!-- main window -->
+<div class="col-md-8">
+
+
+<!-- entities -->
+<div id="main-view-entities" ng-show="ik.mode=='entities'">
+
+<!-- main entities panel -->
+<div id="panel-main-entities" class="col-md-6" style="padding-left: 0px;">
+<div class="panel panel-primary">
+  <div class="panel-heading">
+    <h3 class="panel-title">Entities</h3>
+  </div>
+  <div class="ik-resize-full" style="overflow-y: scroll;">
+    <table class="table table-hover">
+      <tr ng-repeat="e in mainEntities" style="cursor: pointer;" ng-class="{'active': e.value == ik.currentEntity }" ng-click="ik.currentEntity=e.value; ik.exploreEntity(e.value);">
+        <td>{{e.value}}</td><td align="right">{{e.frequency}}</td>
+      </tr>
+    </table>
+  </div>
+</div>
+</div>
+<!-- end of main entities panel -->
+
+<!-- related entities panel -->
+<div id="panel-rel-entities" class="col-md-6" style="padding-right: 0px;">
+<div class="panel panel-primary">
+  <div class="panel-heading">
+    <h3 class="panel-title">Related entities</h3>
+  </div>
+  <div class="ik-resize-full" style="overflow-y: scroll;">
+    <table class="table table-hover">
+      <tr ng-repeat="e in relEntities" style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);">
+        <td>{{e.value}}</td><td align="right">{{e.score}}</td>
+      </tr>
+    </table>
+  </div>
+</div>
+</div>
+<!-- end of related entities panel -->
+
+
+</div>
+<!-- end of entities -->
+
+<!-- sources -->
+<div id="main-view-sources" ng-show="ik.mode=='sources'">
+<div class="panel panel-success">
+  <div class="panel-heading">
+    <h3 class="panel-title">Sources</h3>
+  </div>
+  <div class="ik-resize-full" style="overflow-y: scroll;">
+    <table class="table table-hover">
+      <tr ng-repeat="s in sources" ng-click="ik.showSource(s.id)" style="cursor: pointer;">
+        <td ng-bind-html="s.snippet"></td>
+      </tr>
+    </table>
+  </div>
+</div>
+</div>
+<!-- end of sources -->
+
+<!-- topics -->
+<div id="main-view-topics" ng-show="ik.mode=='topics'">
+topics
+</div>
+<!-- end of topics -->
+
+
+</div>
+<!-- active viewport -->
+
+
+<!-- side panels -->
+<div class="col-md-4">
+
+
+
+<!-- entities -->
+<div id="side-view-entities" ng-show="ik.mode!='entities'" class="row">
+<div class="panel panel-sm panel-primary">
+  <div class="panel-heading">
+    <h3 class="panel-title" ng-click="ik.mode='entities'">Entities
+      <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='entities'"></span>
+    </h3>
+  </div>
+  <div class="ik-resize-panel" style="overflow-y: scroll;">
+    <table class="table table-hover">
+      <tr ng-repeat="e in mainEntities">
+        <td class="ik-truncate">{{e.value}}</td>
+      </tr>
+    </table>
+  </div>
+</div>
+</div>
+<!-- end of entities -->
+
+
+
+<!-- sources -->
+<div id="side-view-sources" ng-show="ik.mode!='sources'" class="row">
+<div class="panel panel-sm panel-success">
+  <div class="panel-heading">
+    <h3 class="panel-title" ng-click="ik.mode='sources'">Sources
+      <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='sources'"></span>
+    </h3>
+  </div>
+  <div class="ik-resize-panel" style="overflow-y: scroll;">
+    <table class="table table-hover">
+      <tr ng-repeat="s in sources" ng-click="ik.showSource(s.id)" style="cursor: pointer;">
+        <td class="ik-truncate" ng-bind-html="s.snippet"></td>
+      </tr>
+    </table>
+  </div>
+</div>
+</div>
+<!-- end of sources -->
+
+
+
+<!-- topics -->
+<div id="side-view-topics" ng-show="ik.mode!='topics'" class="row">
+<div class="panel panel-sm panel-danger">
+  <div class="panel-heading">
+    <h3 class="panel-title" ng-click="ik.mode='topics'">Topics
+      <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='topics'"></span></h3>
+  </div>
+  <div class="ik-resize-panel" style="overflow-y: scroll;">
+    <table class="table table-hover">
+    </table>
+  </div>
+</div>
+</div>
+<!-- end of topics -->
+
+
+
+
+</div>
+<!-- end of side panels -->
+
+
+<!-- source details popup -->
+ <div id="modal-source" class="modal fade" role="dialog">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title">Record #{{ik.selectedSourceId}}</h4>
+      </div>
+      <div class="modal-body" style="overflow-y: scroll; padding: 15px;" class="ik-resize-full">
+        <div ng-bind-html="selectedSource.text"></div>
+      </div>
+      <div class="modal-footer">
+        <!-- TODO: summary function -->
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of source details popup -->
+
+</div>
+</div>
+</body>
+</html>
+]]></CSP>
+</Export>

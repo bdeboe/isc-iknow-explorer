@@ -1,0 +1,16 @@
+<cspapp>/Explorer.csp
+<cspapp>/Explorer.js
+<cspapp>/nglib/angular-messages.min.js
+<cspapp>/nglib/angular-messages.min.js.map
+<cspapp>/nglib/angular-resource.min.js
+<cspapp>/nglib/angular-resource.min.js.map
+<cspapp>/nglib/angular-route.min.js
+<cspapp>/nglib/angular-route.min.js.map
+<cspapp>/nglib/angular-sanitize.min.js
+<cspapp>/nglib/angular-sanitize.min.js.map
+<cspapp>/nglib/angular.min.js
+<cspapp>/nglib/angular.min.js.map
+<cspapp>/nglib/jquery-3.1.0.min.js
+<cspapp>/nglib/jquery-3.1.0.min.map
+Demo.Explorer.RestHandler.cls
+Demo.Explorer.Utils.cls

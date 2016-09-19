@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="Demo.Explorer.RestHandler">
+<IncludeCode>%IKPublic</IncludeCode>
+<Super>%iKnow.REST.Base</Super>
+<TimeCreated>64180,66649.454753</TimeCreated>
+
+<XData name="UrlMap">
+<XMLNamespace>http://www.intersystems.com/urlmap</XMLNamespace>
+<Data><![CDATA[
+<Routes>
+<Route Url="/domain/:domain/sources/count" Method="POST" Call="GetSourceCount" />
+</Routes>
+]]></Data>
+</XData>
+
+<Method name="GetSourceCount">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pDomainId:%Integer</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	set tSC = $$$OK
+	$$$IKRESTINITDEBUG
+	try {
+		do ..ResolveDomainId(.pDomainId)
+		set tSC = ..ParseArgs(pDomainId,,, .tFilter)
+		quit:$$$ISERR(tSC)
+		
+		set tCount = ##class(%iKnow.Queries.SourceAPI).GetCountByDomain(pDomainId, tFilter, .tSC)
+		quit:$$$ISERR(tSC)
+		
+		set tResult = { "count": (tCount) }
+
+	} catch (ex) {
+		set tSC = ex.AsStatus()
+	}
+	quit ..%ProcessResult(tSC, $g(tResult))
+]]></Implementation>
+</Method>
+</Class>
+</Export>
