@@ -17,8 +17,6 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
 	this.filter = '';
     
     
-    
-    
     $scope.mainEntities = [];
     this.getEntities = function(str, forceApply=false) {
         if ((str == null) || (str == '')) {
@@ -107,20 +105,36 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
         }, true);
     };
     
-    
+    $scope.topicLevel = "dictionary";
+    $scope.topicFilter = {};
+    $scope.totalMatchCount = "";
     this.getTopicScores = function(ent) {
-        this.post("/domain/"+this.domain+"/matching/aggregate/dictionary", { filter: this.getEntityFilter(ent) }, function(data) {
-            var arr = [];
+        if (!ent) ent = this.currentEntity;
+        this.post("/domain/"+this.domain+"/matching/aggregate/"+$scope.topicLevel, 
+                  { filter: this.getEntityFilter(ent), topicFilter: $scope.topicFilter }, 
+                  function(data) {
+            var arr = []; var total = 0;
             for (var i = 0; i < data.scores.length; i++) {
                 arr.push({
                     id: data.scores[i].id,
-                    name: data.scores[i].dictionary,
+                    name: data.scores[i].name,
                     value: data.scores[i].totalScore,
                     colorValue: data.scores[i].avgScore,
-                    matchCount: data.scores[i].matchCount
+                    matchCount: data.scores[i].matchCount,
+                    events: { 
+                        click: function(event) {
+                            $scope.topicLevel = 'item';
+                            $scope.topicFilter.dictionaries = [ this.id ];
+                            $("#chart-topics-tree-small-refresh").click();
+                        }
+                    }
                 });
+                total += data.scores[i].matchCount;
             }
+            $scope.totalMatchCount = total;
+            
             $('#chart-topics-tree').highcharts().series[0].setData(arr);
+            $('#chart-topics-tree-small').highcharts().series[0].setData(arr);
         }, true);
     };
 	
@@ -166,7 +180,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
 	  		data: JSON.stringify(reqObj)
 	  	}).done(function(data) {
             if (debug) console.log("RETURN from POST to "+url, data);
-            callback(data, this);
+            callback(data);
         });
     };
     
@@ -205,16 +219,37 @@ $.urlParam = function(name, url) {
 
 // some layout init
 $(document).ready(function() {
-    var totalHeight = 450;
-    $(".ik-resize-full").css("max-height", totalHeight+"px");
-    $(".ik-resize-panel").css("max-height", parseInt(totalHeight/2)+"px");
+    var totalHeight = 450; var halfHeight = parseInt((totalHeight-30)/2);
+    $(".ik-resize-full").css("max-height", totalHeight+"px").css("height", totalHeight+"px");
+    $(".ik-resize-panel").css("max-height", halfHeight+"px").css("height", halfHeight+"px");
 
     // chart init
+    var topicsTreeL = new Highcharts.Chart({
+        chart: { 
+            type: 'treemap',
+            layoutAlgorithm: 'squarified',
+            renderTo: 'chart-topics-tree'
+        },
+        tooltip: {
+            formatter: function () {
+                return this.point.name + ": " + this.point.matchCount + ' matches';
+            }
+        },
+        legend: { enabled: false },
+        title: '',
+        colorAxis: {
+            minColor: '#FFFFFF',
+            maxColor: Highcharts.getOptions().colors[0]
+        },
+        series: [ {
+            data: []
+        } ]
+    });
     var topicsTreeS = new Highcharts.Chart({
         chart: { 
             type: 'treemap',
             layoutAlgorithm: 'squarified',
-            renderTo: 'chart-topics-tree',
+            renderTo: 'chart-topics-tree-small',
             marginLeft: 0,
             marginRight: 0,
             marginTop: 0
@@ -231,7 +266,8 @@ $(document).ready(function() {
             maxColor: Highcharts.getOptions().colors[0]
         },
         series: [ {
-            data: []
+            data: [],
+            cursor: 'pointer'
         } ]
     });
     

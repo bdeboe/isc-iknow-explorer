@@ -169,7 +169,7 @@ body {
     <h3 class="panel-title">Topics <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCountE}} sources">{{totalMatchCount}}</span></h3>
   </div>
   <div class="ik-resize-full" style="overflow-y: scroll;">
-    <div id="chart-topics-tree" class="ik-chart" ></div>
+    <div id="chart-topics-tree" class="ik-chart ik-resize-full" ></div>
   </div>
 </div>
 </div>
@@ -233,9 +233,10 @@ body {
 <div id="side-view-topics" ng-show="ik.mode!='topics'" class="row">
 <div class="panel panel-sm panel-danger">
   <div class="panel-heading">
-    <h4 class="panel-title" ng-click="ik.mode='topics'" style="cursor: pointer;">Topics
+    <h4 class="panel-title">
+      <span ng-click="ik.mode='topics'" style="cursor: pointer;">Topics</span>
       <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCountE}} sources">{{totalMatchCount}}</span>
-      <input type="hidden" id="hidden-topic-level" ng-model="topicLevel" ng-change="console.log('ok'); ik.getTopicScores();" />
+      <span id="chart-topics-tree-small-refresh" class="glyphicon glyphicon-refresh pull-right" style="margin-right: 5px;" ng-click="console.log('ok'); ik.getTopicScores();" ></span>
       <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='topics'"></span>
     </h4>
   </div>

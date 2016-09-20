@@ -64,7 +64,7 @@
 			if $isobject(%request.Content.topicFilter.dictionaries) {
 				set tIterator = %request.Content.topicFilter.dictionaries.%GetIterator()
 				set tIDs = ""
-				while tIterator.%HasNext(,.tID) {
+				while tIterator.%GetNext(,.tID) {
 					set tIDs = tIDs_$s(tIDs="":"",1:",")_tID
 				}
 				set:tIDs'="" tSQL = tSQL_" AND DictionaryId IN ("_tIDs_")"
@@ -72,7 +72,7 @@
 			if $isobject(%request.Content.topicFilter.items) {
 				set tIterator = %request.Content.topicFilter.items.%GetIterator()
 				set tIDs = ""
-				while tIterator.%HasNext(,.tID) {
+				while tIterator.%GetNext(,.tID) {
 					set tIDs = tIDs_$s(tIDs="":"",1:",")_tID
 				}
 				set:tIDs'="" tSQL = tSQL_" AND DictionaryItemId IN ("_tIDs_")"
