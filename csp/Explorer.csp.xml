@@ -11,6 +11,9 @@
 <script type="text/javascript" src="nglib/angular.min.js"></script>
 <script type="text/javascript" src="nglib/angular-resource.min.js"></script>
 <script type="text/javascript" src="nglib/angular-sanitize.min.js"></script> 
+<script type="text/javascript" src="highcharts-4-2-6/js/highcharts.js"></script> 
+<script type="text/javascript" src="highcharts-4-2-6/js/modules/heatmap.js"></script> 
+<script type="text/javascript" src="highcharts-4-2-6/js/modules/treemap.js"></script> 
 <script type="text/javascript" src="Explorer.js"></script>
 
 <link rel="stylesheet" type="text/css" href="bootstrap-3-3-5/dist/css/bootstrap.min.css" />
@@ -53,6 +56,20 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.ik-chart {
+  margin: 0px;
+  min-height: 150px;
+  min-width: 300px;
+  max-width: 600px;
+}
+
+.panel-sm .ik-chart {
+  height: 200px;
+  min-height: 150px;
+  min-width: 300px;
+  max-width: 600px;
+}
 </style>
 
 </head>
@@ -73,7 +90,7 @@ body {
 </div>
 
 <div class="col-md-8">
-<button class="btn btn-default">filters <span class="badge">{{filteredSourceCount}}</span></button>
+<button class="btn btn-default">Global filters: <span class="badge">{{filteredSourceCountG}}</span></button>
 </div>
 
 </div>
@@ -97,7 +114,8 @@ body {
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <table class="table table-hover">
       <tr ng-repeat="e in mainEntities" style="cursor: pointer;" ng-class="{'active': e.value == ik.currentEntity }" ng-click="ik.currentEntity=e.value; ik.exploreEntity(e.value);">
-        <td>{{e.value}}</td><td align="right">{{e.frequency}}</td>
+        <td>{{e.value}}</td>
+        <td align="right">{{e.frequency}}</td>
       </tr>
     </table>
   </div>
@@ -114,7 +132,8 @@ body {
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <table class="table table-hover">
       <tr ng-repeat="e in relEntities" style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);">
-        <td>{{e.value}}</td><td align="right">{{e.score}}</td>
+        <td>{{e.value}}</td>
+        <td align="right">{{e.proximity}}</td>
       </tr>
     </table>
   </div>
@@ -130,7 +149,7 @@ body {
 <div id="main-view-sources" ng-show="ik.mode=='sources'">
 <div class="panel panel-success">
   <div class="panel-heading">
-    <h3 class="panel-title">Sources</h3>
+    <h3 class="panel-title">Sources <span class="badge" title="{{filteredSourceCount}} sources">{{filteredSourceCountE}}</span></h3>
   </div>
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <table class="table table-hover">
@@ -145,7 +164,14 @@ body {
 
 <!-- topics -->
 <div id="main-view-topics" ng-show="ik.mode=='topics'">
-topics
+<div class="panel panel-danger">
+  <div class="panel-heading">
+    <h3 class="panel-title">Topics <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCountE}} sources">{{totalMatchCount}}</span></h3>
+  </div>
+  <div class="ik-resize-full" style="overflow-y: scroll;">
+    <div id="chart-topics-tree" class="ik-chart" ></div>
+  </div>
+</div>
 </div>
 <!-- end of topics -->
 
@@ -163,14 +189,15 @@ topics
 <div id="side-view-entities" ng-show="ik.mode!='entities'" class="row">
 <div class="panel panel-sm panel-primary">
   <div class="panel-heading">
-    <h3 class="panel-title" ng-click="ik.mode='entities'">Entities
+    <h4 class="panel-title" ng-click="ik.mode='entities'" style="cursor: pointer;">Entities
       <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='entities'"></span>
-    </h3>
+    </h4>
   </div>
   <div class="ik-resize-panel" style="overflow-y: scroll;">
     <table class="table table-hover">
-      <tr ng-repeat="e in mainEntities">
+      <tr ng-repeat="e in mainEntities"  style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);" >
         <td class="ik-truncate">{{e.value}}</td>
+        <td align="right">{{e.frequency}}</td>
       </tr>
     </table>
   </div>
@@ -184,9 +211,10 @@ topics
 <div id="side-view-sources" ng-show="ik.mode!='sources'" class="row">
 <div class="panel panel-sm panel-success">
   <div class="panel-heading">
-    <h3 class="panel-title" ng-click="ik.mode='sources'">Sources
+    <h4 class="panel-title" ng-click="ik.mode='sources'" style="cursor: pointer;">Sources 
+      <span class="badge" title="based on {{filteredSourceCountE}} sources">{{filteredSourceCountE}}</span>
       <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='sources'"></span>
-    </h3>
+    </h4>
   </div>
   <div class="ik-resize-panel" style="overflow-y: scroll;">
     <table class="table table-hover">
@@ -205,12 +233,14 @@ topics
 <div id="side-view-topics" ng-show="ik.mode!='topics'" class="row">
 <div class="panel panel-sm panel-danger">
   <div class="panel-heading">
-    <h3 class="panel-title" ng-click="ik.mode='topics'">Topics
-      <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='topics'"></span></h3>
+    <h4 class="panel-title" ng-click="ik.mode='topics'" style="cursor: pointer;">Topics
+      <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCountE}} sources">{{totalMatchCount}}</span>
+      <input type="hidden" id="hidden-topic-level" ng-model="topicLevel" ng-change="console.log('ok'); ik.getTopicScores();" />
+      <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='topics'"></span>
+    </h4>
   </div>
   <div class="ik-resize-panel" style="overflow-y: scroll;">
-    <table class="table table-hover">
-    </table>
+    <div id="chart-topics-tree-small" class="ik-chart" ></div>
   </div>
 </div>
 </div>

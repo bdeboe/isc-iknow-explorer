@@ -10,6 +10,7 @@
 <Data><![CDATA[
 <Routes>
 <Route Url="/domain/:domain/sources/count" Method="POST" Call="GetSourceCount" />
+<Route Url="/domain/:domain/matching/aggregate/:level" Method="POST" Call="GetMatchScoresDict" />
 </Routes>
 ]]></Data>
 </XData>
@@ -20,7 +21,6 @@
 <ReturnType>%Status</ReturnType>
 <Implementation><![CDATA[
 	set tSC = $$$OK
-	$$$IKRESTINITDEBUG
 	try {
 		do ..ResolveDomainId(.pDomainId)
 		set tSC = ..ParseArgs(pDomainId,,, .tFilter)
@@ -30,6 +30,74 @@
 		quit:$$$ISERR(tSC)
 		
 		set tResult = { "count": (tCount) }
+
+	} catch (ex) {
+		set tSC = ex.AsStatus()
+	}
+	quit ..%ProcessResult(tSC, $g(tResult))
+]]></Implementation>
+</Method>
+
+<Method name="GetMatchScoresDict">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pDomainId:%Integer,pLevel:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	set tSC = $$$OK
+	try {
+		do ..ResolveDomainId(.pDomainId)
+		set tSC = ..ParseArgs(pDomainId,,, .tFilter)
+		quit:$$$ISERR(tSC)
+		
+		set tPackage = ##class(%iKnow.Domain).%OpenId(pDomainId).GetParameter($$$IKPPACKAGE)
+		set tPackage = $tr(tPackage,".","_")
+		
+		if pLevel="dictionary" {
+			set tSQL = "SELECT DictionaryId As ID, Dictionary->Name As Name"
+		} else {
+			set tSQL = "SELECT DictionaryItemId AS ID, DictionaryItem->URI URI, DictionaryItem->Name As Name"
+		}
+		set tSQL = tSQL_", SUM(Score) TotalScore, AVG(Score) AvgScore, COUNT(*) MatchCount FROM "_tPackage_".DictionaryMatch"
+		set tSQL = tSQL_" WHERE SourceID %FIND Demo_Explorer.Find("_pDomainId_",'"_$s($isobject(tFilter):$replace(tFilter.ToString(),"'","''"), 1:"")_"')"
+		
+		if $isobject(%request.Content.topicFilter) {
+			if $isobject(%request.Content.topicFilter.dictionaries) {
+				set tIterator = %request.Content.topicFilter.dictionaries.%GetIterator()
+				set tIDs = ""
+				while tIterator.%HasNext(,.tID) {
+					set tIDs = tIDs_$s(tIDs="":"",1:",")_tID
+				}
+				set:tIDs'="" tSQL = tSQL_" AND DictionaryId IN ("_tIDs_")"
+			}
+			if $isobject(%request.Content.topicFilter.items) {
+				set tIterator = %request.Content.topicFilter.items.%GetIterator()
+				set tIDs = ""
+				while tIterator.%HasNext(,.tID) {
+					set tIDs = tIDs_$s(tIDs="":"",1:",")_tID
+				}
+				set:tIDs'="" tSQL = tSQL_" AND DictionaryItemId IN ("_tIDs_")"
+			}
+		}
+		
+		if pLevel="dictionary" {
+			set tSQL = tSQL_" GROUP BY DictionaryId"
+		} else {
+			set tSQL = tSQL_" GROUP BY DictionaryItemId"
+		}
+		
+		set tStatement = ##class(%SQL.Statement).%New()
+		set tSC = tStatement.%Prepare(tSQL)
+		quit:$$$ISERR(tSC)
+		
+		set tResult = { "scores": [], "debug": { "sql": (tSQL) } }
+		set tSQLResult = tStatement.%Execute()
+		while tSQLResult.%Next() {
+			do tResult.scores.%Push({"id": (tSQLResult.%Get("ID")), 
+									 "name": (tSQLResult.%Get("Name")), 
+									 "totalScore": (tSQLResult.%Get("TotalScore")), 
+									 "avgScore": (tSQLResult.%Get("AvgScore")), 
+									 "matchCount": (tSQLResult.%Get("MatchCount"))})
+		}
 
 	} catch (ex) {
 		set tSC = ex.AsStatus()

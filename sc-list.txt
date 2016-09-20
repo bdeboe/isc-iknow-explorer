@@ -1,5 +1,6 @@
 <cspapp>/Explorer.csp
 <cspapp>/Explorer.js
+<cspapp>/highcharts-4-2-6
 <cspapp>/nglib/angular-messages.min.js
 <cspapp>/nglib/angular-messages.min.js.map
 <cspapp>/nglib/angular-resource.min.js

@@ -46,6 +46,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
         if (!leaveMainEntities) this.getEntities(ent, forceApply);
         this.getRelatedEntities(ent, forceApply);
         this.getSources(ent, forceApply);
+        this.getTopicScores(ent);
     }
     
     
@@ -57,13 +58,32 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
     
     
     $scope.sources = [];
+    $scope.filteredSourceCountE = "";
     this.getSources = function(ent, forceApply=false) {
-        var request = { entity: ent, highlight: this.getHighlights() };
-        request.highlight.push({"style": "<b>", "entities": [ent]});
-        this.post("/domain/"+this.domain+"/sources/by/entity", request, function(data) {
-            $scope.sources = data.sources;
-            if (forceApply) $scope.$apply();
-        });
+        var request = { highlight: this.getHighlights() };
+        if (ent != null) {
+            request.filter = this.getEntityFilter(ent);
+            request.entity = ent;
+            request.highlight.push({"style": "<b>", "entities": [ent]});
+            this.post("/domain/"+this.domain+"/sources/by/entity", request, function(data) {
+                $scope.sources = data.sources;
+                $scope.$apply();
+            });
+            this.post("/domain/"+this.domain+"/sources/count", { filter: this.getEntityFilter(ent)  }, function(data) {
+                $scope.filteredSourceCountE = data.count;
+                $scope.$apply();
+            }, true);
+        } else {
+            request.filter = this.getGlobalFilter();
+            this.post("/domain/"+this.domain+"/sources", request, function(data) {
+                $scope.sources = data.sources;
+                $scope.$apply();
+            });
+            this.post("/domain/"+this.domain+"/sources/count", { }, function(data) {
+                $scope.filteredSourceCountE = data.count;
+                $scope.$apply();
+            }, true);
+        }
     };
     this.showSource = function(srcId) {
         this.selectedSourceSummarize = 0;
@@ -79,18 +99,47 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
             $scope.$apply();
         });
     };
-    $scope.filteredSourceCount = "";
+    $scope.filteredSourceCountG = "";
     this.getSourceCount = function(forceApply=false) {
-        this.post("/domain/"+this.domain+"/sources/count", {}, function(data) {
-            $scope.filteredSourceCount = data.count;
+        this.post("/domain/"+this.domain+"/sources/count", { filter: this.getGlobalFilter() }, function(data) {
+            $scope.filteredSourceCountG = data.count;
             if (forceApply) $scope.$apply();
+        }, true);
+    };
+    
+    
+    this.getTopicScores = function(ent) {
+        this.post("/domain/"+this.domain+"/matching/aggregate/dictionary", { filter: this.getEntityFilter(ent) }, function(data) {
+            var arr = [];
+            for (var i = 0; i < data.scores.length; i++) {
+                arr.push({
+                    id: data.scores[i].id,
+                    name: data.scores[i].dictionary,
+                    value: data.scores[i].totalScore,
+                    colorValue: data.scores[i].avgScore,
+                    matchCount: data.scores[i].matchCount
+                });
+            }
+            $('#chart-topics-tree').highcharts().series[0].setData(arr);
         }, true);
     };
 	
     
     // utility functions
+    this.getGlobalFilter = function() {
+        return this.filter;
+    }
+    this.getEntityFilter = function(ent) {
+        var gf = this.getGlobalFilter();
+        if (!ent) { return gf };
+        var ef = { className: "%iKnow.Filters.ContainsEntityFilter", arguments: [ ent ] };
+        if (gf) ef = { operator: "AND", filters: [ gf, ef ] };
+        return ef;
+    }
     this.getHighlights = function() {
-        return [{"style": "<b>", "entities": [this.currentEntity]}];
+        var h = [];
+        if (this.currentEntity) h[h.length] = {"style": "<b>", "entities": [this.currentEntity]};
+        return h;
     }
     
     this.post = function(path, reqObj, callback, customREST=false) {
@@ -104,7 +153,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
         
         // auto-append filter & other params
         if (!reqObj) reqObj = {};
-        if (this.filter) reqObj.filter = this.filter;
+        if (this.filter && !reqObj.filter) reqObj.filter = this.filter;
         reqObj.page = 1;
         reqObj.pageSize = pageSize;
         
@@ -134,8 +183,9 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
         if (debug) console.log("Assuming namespace is '"+this.namespace+"'");
     }
     this.getEntities('', true); // init top entities
+    this.getSources(null, true); // init filtered source count
     this.getSourceCount(true); // init filtered source count
-    
+    this.getTopicScores();
     
 }]);
 
@@ -158,6 +208,33 @@ $(document).ready(function() {
     var totalHeight = 450;
     $(".ik-resize-full").css("max-height", totalHeight+"px");
     $(".ik-resize-panel").css("max-height", parseInt(totalHeight/2)+"px");
+
+    // chart init
+    var topicsTreeS = new Highcharts.Chart({
+        chart: { 
+            type: 'treemap',
+            layoutAlgorithm: 'squarified',
+            renderTo: 'chart-topics-tree',
+            marginLeft: 0,
+            marginRight: 0,
+            marginTop: 0
+        },
+        tooltip: {
+            formatter: function () {
+                return this.point.name + ": " + this.point.matchCount + ' matches';
+            }
+        },
+        legend: { enabled: false },
+        title: '',
+        colorAxis: {
+            minColor: '#FFFFFF',
+            maxColor: Highcharts.getOptions().colors[0]
+        },
+        series: [ {
+            data: []
+        } ]
+    });
+    
 });
 ]]></CSP>
 </Export>
