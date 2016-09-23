@@ -1,5 +1,8 @@
 <cspapp>/Explorer.csp
 <cspapp>/Explorer.js
+<cspapp>/datetimepicker-0.0.11/css/bootstrap-datetimepicker.min.css
+<cspapp>/datetimepicker-0.0.11/js
+<cspapp>/datetimepicker-0.0.11/js/bootstrap-datetimepicker.min.js
 <cspapp>/highcharts-4-2-6
 <cspapp>/nglib/angular-messages.min.js
 <cspapp>/nglib/angular-messages.min.js.map

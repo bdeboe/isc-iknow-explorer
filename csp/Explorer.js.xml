@@ -8,13 +8,13 @@ var ikApp = angular.module('ikApp', ['ngSanitize']);
 var debug = true;
 var pageSize = 50;
 
-ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scope, $filter, $sce) {
+ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($scope, $filter, $compile) {
 	
 	this.domain = $.urlParam("domain");
     this.namespace = $.urlParam("namespace");
 	this.mode = 'entities';
 	this.currentEntity = '';
-	this.filter = '';
+	this.filter = {};
     
     
     $scope.mainEntities = [];
@@ -110,12 +110,18 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
     $scope.totalMatchCount = "";
     this.getTopicScores = function(ent) {
         if (!ent) ent = this.currentEntity;
+        var c = $('#chart-topics-tree-small').highcharts();
+        if (c && c.series) {
+            for (var i=0; i<c.series.length;i++) {
+                c.series[0].remove();
+            }
+        }
         this.post("/domain/"+this.domain+"/matching/aggregate/"+$scope.topicLevel, 
                   { filter: this.getEntityFilter(ent), topicFilter: $scope.topicFilter }, 
                   function(data) {
-            var arr = []; var total = 0;
+            var agg = []; var total = 0; 
             for (var i = 0; i < data.scores.length; i++) {
-                arr.push({
+                agg.push({
                     id: data.scores[i].id,
                     name: data.scores[i].name,
                     value: data.scores[i].totalScore,
@@ -130,25 +136,131 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
                     }
                 });
                 total += data.scores[i].matchCount;
+                
+                // and for the time graph
+                var timeSeriesData = [];
+                for (var j = 0; j < data.scores[i].detail.length; j++) {
+                    var d = data.scores[i].detail[j].pubDate.split(':');
+                    timeSeriesData.push([Date.UTC(d[0],d[1],d[2],d[3]), data.scores[i].detail[j].matchCount]);
+                }
+                $('#chart-topics-tree-small').highcharts().addSeries({ name: data.scores[i].name, data: timeSeriesData});
             }
             $scope.totalMatchCount = total;
             
-            $('#chart-topics-tree').highcharts().series[0].setData(arr);
-            $('#chart-topics-tree-small').highcharts().series[0].setData(arr);
+            $('#chart-topics-tree').highcharts().series[0].setData(agg);
+            $('#chart-topics-tree-small').highcharts().series[0].setData(agg);
         }, true);
     };
+    
+    this.filterDateField = 'PublicationDate'; // TODO: parameterize
+    this.saveFilterForm = function() {
+        // time
+        var fromDate = $.horolog($('#input-filter-date-from').data('datetimepicker').getDate());
+        var toDate = $.horolog($('#input-filter-date-to').data('datetimepicker').getDate());
+        if (fromDate != null) {
+            if (toDate != null) {
+                this.filter.dateFilter = { field: this.filterDateField, operator: 'BETWEEN', value:fromDate+';'+toDate };
+            } else {
+                this.filter.dateFilter = { field: this.filterDateField, operator: '>=', value:fromDate };
+            }
+        } else {
+            if (toDate != null) {
+                this.filter.dateFilter = { field: this.filterDateField, operator: '<=', value:toDate };
+            } else {
+                this.filter.dateFilter = null;
+            }
+        }
+        this.exploreEntity(null, false, true);
+        $('#modal-filters').modal('hide');
+        this.updateFilterBar();
+    }
+    
+    this.updateFilterBar = function() {
+        $('#filter-bar').empty();
+        if (!this.filter) return;
+        
+        // time range
+        if (this.filter.dateFilter) {
+            var df = $('#input-filter-date-from').data('datetimepicker').getDate();
+            var dt = $('#input-filter-date-to').data('datetimepicker').getDate();
+            if (df && dt) {
+                var lbl = df.toLocaleDateString()+' > '+dt.toLocaleDateString();
+            } else if (df) {
+                var lbl = 'since '+df.toLocaleDateString();
+            } else if (dt) {
+                var lbl = 'until '+dt.getLocaleDateString();
+            }
+            var b = $("<button>").attr("type","button").css('margin-left', '15px')
+                    .addClass("btn btn-success").text(lbl);
+            $("<span>").addClass("glyphicon glyphicon-remove")
+                    .attr("ng-click","console.log('ok'); ik.removeFilter('date');")
+                    .appendTo(b);
+            b.appendTo('#filter-bar');
+            
+            $compile(b)($scope);
+        }
+        
+        // entity
+        if (this.filter.entities) {
+            var b = $("<button>").attr("type","button").css('margin-left', '15px')
+                    .addClass("btn btn-primary").text("Contains: "+this.filter.entities.join(','));
+            $("<span>").addClass("glyphicon glyphicon-remove")
+                    .attr("ng-click","console.log('ok'); ik.removeFilter('entity');")
+                    .appendTo(b);
+            b.appendTo('#filter-bar');
+            
+            $compile(b)($scope);
+        }
+        
+        // topic
+        if (this.filter.topic) {
+            var b = $("<button>").attr("type","button").css('margin-left', '15px')
+                    .addClass("btn btn-danger").text("Topic: "+this.filter.topic);
+            $("<span>").addClass("glyphicon glyphicon-remove")
+                    .attr("ng-click","console.log('ok'); ik.removeFilter('topic');")
+                    .appendTo(b);
+            b.appendTo('#filter-bar');
+            
+            $compile(b)($scope);
+        }
+    }
+    this.removeFilter = function(name) {
+        if (name == 'date') {
+            delete this.filter.dateFilter;
+        } else if (name == 'entity') {
+            delete this.filter.entities;
+        } else if (name == 'topic') {
+            delete this.filter.topic;
+        }
+        this.exploreEntity(null, false, true);
+        this.updateFilterBar();
+    }
 	
     
     // utility functions
     this.getGlobalFilter = function() {
-        return this.filter;
+        // always returns a { operator: "AND", filters: [ ... ] };
+        var filters = [];
+        if (this.filter.dateFilter) filters.push(this.filter.dateFilter);
+        if (this.filter.entities && (this.filter.entities.length>0)) {
+            var ent = this.filter.entities.join(',');
+            filters.push({ className: "%iKnow.Filters.ContainsEntityFilter", arguments: [ ent ] });
+        }
+        if (this.filter.topic) {
+            filters.push({ className: "%iKnow.Filters.SimpleMatchFilter", arguments: [ this.filter.topic ] });
+        }
+        return (filters.length>0) ? { operator: "AND", filters: filters } : null;
     }
     this.getEntityFilter = function(ent) {
         var gf = this.getGlobalFilter();
         if (!ent) { return gf };
         var ef = { className: "%iKnow.Filters.ContainsEntityFilter", arguments: [ ent ] };
-        if (gf) ef = { operator: "AND", filters: [ gf, ef ] };
-        return ef;
+        if (gf) {
+            gf.filters.push(ef);
+            return gf;
+        } else {
+            return ef;
+        }
     }
     this.getHighlights = function() {
         var h = [];
@@ -167,7 +279,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$sce', function($scop
         
         // auto-append filter & other params
         if (!reqObj) reqObj = {};
-        if (this.filter && !reqObj.filter) reqObj.filter = this.filter;
+        if (!reqObj.filter) reqObj.filter = this.getGlobalFilter();
         reqObj.page = 1;
         reqObj.pageSize = pageSize;
         
@@ -216,12 +328,23 @@ $.urlParam = function(name, url) {
     }
     return results[1] || undefined;
 }
+$.horolog = function(date) {
+    if (!date) return null;
+    var milliSeconds = date.getTime();
+    var timeOfDay = Math.floor(milliSeconds/1000) % 86400;
+    var days = Math.floor(milliSeconds / 86400000)+47117;
+    return days+','+timeOfDay;
+}
 
 // some layout init
 $(document).ready(function() {
     var totalHeight = 450; var halfHeight = parseInt((totalHeight-30)/2);
     $(".ik-resize-full").css("max-height", totalHeight+"px").css("height", totalHeight+"px");
     $(".ik-resize-panel").css("max-height", halfHeight+"px").css("height", halfHeight+"px");
+    
+    // datepicker init
+    $('#input-filter-date-from').datetimepicker({language: 'en'});
+    $('#input-filter-date-to').datetimepicker({language: 'en'});
 
     // chart init
     var topicsTreeL = new Highcharts.Chart({
@@ -245,7 +368,7 @@ $(document).ready(function() {
             data: []
         } ]
     });
-    var topicsTreeS = new Highcharts.Chart({
+    /*var topicsTreeS = new Highcharts.Chart({
         chart: { 
             type: 'treemap',
             layoutAlgorithm: 'squarified',
@@ -269,6 +392,32 @@ $(document).ready(function() {
             data: [],
             cursor: 'pointer'
         } ]
+    });*/
+    var topicsTimeS = new Highcharts.Chart({
+        chart: {
+            type: 'line',
+            zoomType: 'x',
+            renderTo: 'chart-topics-tree-small',
+            marginLeft: 0,
+            marginRight: 0,
+            marginTop: 0
+        },
+        legend: { enabled: false },
+        title: '',
+        xAxis: {
+            type: 'datetime',
+            min: Date.UTC(2016,9,12)
+        },
+        yAxis: {
+        },
+        plotOptions: {
+            line: {
+                marker: {
+                    enabled: false
+                }
+            }
+        },
+        series: []
     });
     
 });

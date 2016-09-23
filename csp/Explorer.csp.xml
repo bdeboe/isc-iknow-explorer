@@ -14,9 +14,11 @@
 <script type="text/javascript" src="highcharts-4-2-6/js/highcharts.js"></script> 
 <script type="text/javascript" src="highcharts-4-2-6/js/modules/heatmap.js"></script> 
 <script type="text/javascript" src="highcharts-4-2-6/js/modules/treemap.js"></script> 
+<script type="text/javascript" src="datetimepicker-0.0.11/js/bootstrap-datetimepicker.min.js"></script> 
 <script type="text/javascript" src="Explorer.js"></script>
 
 <link rel="stylesheet" type="text/css" href="bootstrap-3-3-5/dist/css/bootstrap.min.css" />
+<link rel="stylesheet" type="text/css" href="datetimepicker-0.0.11/css/bootstrap-datetimepicker.min.css" />
 
 <style type="text/css">
 body {
@@ -70,6 +72,13 @@ body {
   min-width: 300px;
   max-width: 600px;
 }
+
+.bootstrap-datetimepicker-widget table {
+	font-size: small;
+}
+.bootstrap-datetimepicker-widget ul {
+	padding: 0px;
+}
 </style>
 
 </head>
@@ -89,8 +98,15 @@ body {
 </div>
 </div>
 
-<div class="col-md-8">
-<button class="btn btn-default">Global filters: <span class="badge">{{filteredSourceCountG}}</span></button>
+<div class="col-md-7">
+<div class="row">
+<button class="btn btn-default" onclick="$('#modal-filters').modal();">Global filters: <span class="badge">{{filteredSourceCountG}}</span></button>
+<span id="filter-bar"></span>
+</div>
+</div>
+
+<div class="col-md-1">
+<span class="glyphicon glyphicon-cog" ></span>
 </div>
 
 </div>
@@ -236,8 +252,8 @@ body {
     <h4 class="panel-title">
       <span ng-click="ik.mode='topics'" style="cursor: pointer;">Topics</span>
       <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCountE}} sources">{{totalMatchCount}}</span>
-      <span id="chart-topics-tree-small-refresh" class="glyphicon glyphicon-refresh pull-right" style="margin-right: 5px;" ng-click="console.log('ok'); ik.getTopicScores();" ></span>
       <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='topics'"></span>
+      <span id="chart-topics-tree-small-refresh" class="glyphicon glyphicon-refresh pull-right" style="margin-right: 5px;" ng-click="ik.getTopicScores();" ></span>
     </h4>
   </div>
   <div class="ik-resize-panel" style="overflow-y: scroll;">
@@ -272,6 +288,54 @@ body {
   </div>
 </div>
 <!-- end of source details popup -->
+
+
+
+<!-- filter popup -->
+ <div id="modal-filters" class="modal fade" role="dialog">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title">Global filters</h4>
+      </div>
+      <div class="modal-body" style="overflow-y: scroll; padding: 15px;" class="ik-resize-full">
+        <form>
+		  <div class="form-group">
+		    <label for="input-filter-date-from">Time range</label>
+		    <div class="row">
+		    <div class="col-md-6">
+		      <div id="input-filter-date-from" class="input-group date">
+  	  	        <input class="form-control" data-format="dd/MM/yyyy hh:mm:ss" type="text"></input>
+                <span class="input-group-addon add-on" >
+		          <span class="glyphicon glyphicon-calendar"></span>
+		        </span>
+		      </div>
+		    </div>
+		    <div class="col-md-6">
+		      <div id="input-filter-date-to" class="input-group date">
+  		        <input class="form-control" data-format="dd/MM/yyyy hh:mm:ss" type="text"></input>
+                <span class="input-group-addon add-on" >
+		          <span class="glyphicon glyphicon-calendar"></span>
+		        </span>
+		      </div>
+		    </div>
+		    </div>
+		  </div>
+		  
+		  <!--div class="form-group">
+		    <label for="input-filter-date-from">Time range</label>
+		    <input class="form-control" type="date" ></input>
+		  </div-->
+          <button type="submit" class="btn btn-default" ng-click="$('#input-filter-date-from').setDate(null); $('#input-filter-date-from').setDate(null);">Reset</button>
+          <button type="submit" class="btn btn-primary" ng-click="ik.saveFilterForm();">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of source details popup -->
+
 
 </div>
 </div>
