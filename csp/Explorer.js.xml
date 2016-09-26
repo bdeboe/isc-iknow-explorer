@@ -8,7 +8,7 @@ var ikApp = angular.module('ikApp', ['ngSanitize']);
 var debug = true;
 var pageSize = 50;
 
-ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($scope, $filter, $compile) {
+ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', function($scope, $filter, $compile, $sce) {
 	
 	this.domain = $.urlParam("domain");
     this.namespace = $.urlParam("namespace");
@@ -18,7 +18,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
     
     
     $scope.mainEntities = [];
-    this.getEntities = function(str, forceApply=false) {
+    this.getEntities = function(str, forceApply=true) {
         if ((str == null) || (str == '')) {
             this.post("/domain/"+this.domain+"/entities", {}, function(data, ctrl) { 
                 $scope.mainEntities = data.entities;
@@ -33,74 +33,196 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
     };
     
     $scope.relEntities = [];
-    this.getRelatedEntities = function(ent, forceApply=false) {
+    this.getRelatedEntities = function(ent, forceApply=true) {
+        if ((ent==null) || (ent=='')) {
+            $scope.relEntities=[];
+            return;
+        }
         this.post("/domain/"+this.domain+"/entities/related", { entity: ent }, function(data) {
             $scope.relEntities = data.entities;
             if (forceApply) $scope.$apply();
         });
     };
     
-    this.exploreEntity = function(ent, leaveMainEntities=true, forceApply=false) {
-        if (!leaveMainEntities) this.getEntities(ent, forceApply);
+    this.explore = function(ent, forceApply=true) {
+        this.exploreEntity(ent, forceApply);
+        this.getSources(forceApply);
+        this.getTopicScores(forceApply);
+    }
+    this.exploreEntity = function(ent, forceApply=true) {
+        this.currentEntity = ent;
+        this.getEntities(ent, forceApply);
         this.getRelatedEntities(ent, forceApply);
-        this.getSources(ent, forceApply);
-        this.getTopicScores(ent);
     }
     
     
 	this.typeEntity = function(event) {
 		if (event && ((event.keyCode==13) || (event.which==13))) {
-			this.exploreEntity(this.currentEntity, false);
+			this.exploreEntity(this.currentEntity);
 		}
 	}
     
     
+    $scope.pathEnts = [];
+    $scope.paths = [];
+    this.getPaths = function(otherEnt) {
+        $scope.pathEnts = [this.currentEntity, otherEnt ];
+        this.post("/domain/"+this.domain+"/paths/by/entity", { 
+            entity: $scope.pathEnts,
+            setOperation: 'intersect'
+        }, function(data) {
+            $scope.paths = [];
+            for (var i in data.paths) {
+                var p = data.paths[i]; 
+                var str = '';
+                for (var j in p.entities) {
+                    var e = p.entities[j];
+                    str += "<button type='button' class='btn btn-sm ";
+                    if ($scope.pathEnts.indexOf(e.entity)>=0) {
+                        str += "btn-success";
+                    } else if (e.role == 'concept') {
+                        str += "btn-primary";
+                    } else if (e.role == 'relation') {
+                        str += "btn-default";
+                    } else if (e.role == 'pathRelevant') {
+                        str += "btn-info";
+                    }
+                    str += "' style='margin-right: 10px; padding: 1px 5px;"
+                    str += "'>"+ e.entity + "</button>";
+                }
+                var obj = { sourceId: p.sourceId, str: $sce.trustAsHtml(str) };
+                $scope.paths.push(obj);
+            }
+            $scope.$apply();
+            $('#modal-paths').modal('show');
+        });
+    };
+    
     $scope.sources = [];
-    $scope.filteredSourceCountE = "";
-    this.getSources = function(ent, forceApply=false) {
-        var request = { highlight: this.getHighlights() };
-        if (ent != null) {
-            request.filter = this.getEntityFilter(ent);
-            request.entity = ent;
-            request.highlight.push({"style": "<b>", "entities": [ent]});
-            this.post("/domain/"+this.domain+"/sources/by/entity", request, function(data) {
-                $scope.sources = data.sources;
-                $scope.$apply();
-            });
-            this.post("/domain/"+this.domain+"/sources/count", { filter: this.getEntityFilter(ent)  }, function(data) {
-                $scope.filteredSourceCountE = data.count;
-                $scope.$apply();
-            }, true);
-        } else {
-            request.filter = this.getGlobalFilter();
-            this.post("/domain/"+this.domain+"/sources", request, function(data) {
-                $scope.sources = data.sources;
-                $scope.$apply();
-            });
-            this.post("/domain/"+this.domain+"/sources/count", { }, function(data) {
-                $scope.filteredSourceCountE = data.count;
-                $scope.$apply();
-            }, true);
-        }
+    $scope.filteredSourceCount = "";
+    this.getSources = function(forceApply=false) {
+        this.getSourceCount();
+        var request = { 
+            highlight: this.getHighlights(),
+            includeMetadata: false,
+            includeSnippets: 1
+        };
+        this.post("/domain/"+this.domain+"/sources", request, function(data) {
+            $scope.sources = data.sources;
+            $scope.$apply();
+            $scope.applyHighlighting();
+        });
     };
     this.showSource = function(srcId) {
         this.selectedSourceSummarize = 0;
         this.selectedSourceId = srcId;
+        $scope.selectedSource = {};
         this.drawSource();
         $("#modal-source").modal();
     }
     this.drawSource = function() {
-        var request = { summarize: this.selectedSourceSummarize, 
-                        highlight: this.getHighlights() };
-        this.post("/domain/"+this.domain+"/sources/"+this.selectedSourceId+"/details", request, function(data) {
-            $scope.selectedSource = data;
+        this.post("/domain/"+this.domain+"/sources/"+this.selectedSourceId+"/details",  { 
+            summarize: this.selectedSourceSummarize, 
+            highlight: this.getHighlights() 
+        }, function(data) {
+            $scope.selectedSource.metadata = data.metadata;
+            $scope.selectedSource.text = data.text;
+            $scope.$apply();
+            $scope.applyHighlighting();
+            $('#modal-source-link').click(function(event) {
+               window.open(data.metadata.Link, '_blank'); 
+            });
+        });
+        
+        this.post("/domain/"+this.domain+"/entities", {
+            filter: { ids: [this.selectedSourceId]},
+            sortBy: 'dominance'
+        }, function(data) {
+            $scope.selectedSource.entities = data.entities;
             $scope.$apply();
         });
+        this.post("/domain/"+this.domain+"/matching/matches/by/source/"+this.selectedSourceId, { 
+            matchFirst: false, 
+            includeSnippets: 0, 
+            includeDictionaryDetails: true,
+            page: 0, pageSize: 0
+        }, function(data) {
+            var c = $('#chart-src-topics').highcharts();
+            if (c) c.destroy();
+            
+            var metric = 'score';
+            var map = { d:{}, i:{} };
+            for (var i in data.matches) {
+                var m = data.matches[i];
+                var dict = m.term.item.dictionary;
+                var color = $scope.getTopicSettings(dict.id, dict.name).color;
+                if (!map.d[dict.id]) { 
+                    map.d[dict.id] = {
+                        y: m[metric],
+                        name: dict.name,
+                        drilldown: 'd'+dict.id,
+                        color: color
+                    };
+                    map.i[dict.id] = {};
+                    map.i[dict.id][m.term.item.id] = {
+                        name: m.term.item.name,
+                        value: m[metric]
+                    };
+                } else {
+                    map.d[dict.id].y += m[metric];
+                    if (!map.i[dict.id][m.term.item.id]) {
+                        map.i[dict.id][m.term.item.id] = {
+                            name: m.term.item.name,
+                            value: m[metric]
+                        };
+                    } else {
+                        map.i[dict.id][m.term.item.id].value += m[metric];
+                    }
+                }
+            }
+            var seriesData = [];
+            var drilldownSeries = [];
+            for (var i in map.d) {
+                seriesData.push(map.d[i]);
+                var dd = {
+                    name: map.d[i].name,
+                    id: map.d[i].drilldown,
+                    data: []
+                };
+                for (var j in map.i[i]) {
+                    dd.data.push([map.i[i][j].name, map.i[i][j].value]);
+                }
+                drilldownSeries.push(dd);
+            }
+            console.log(drilldownSeries);
+            
+            $('#chart-src-topics').highcharts({
+                chart: {
+                    type: 'bar'
+                },
+                title: '',
+                legend: {
+                    enabled: true
+                },
+                xAxis: {
+                    type: 'category'
+                },
+                yAxis: {
+                    title: {
+                        enabled: false
+                    }
+                },
+                series: [{
+                    name: "matches",
+                    data: seriesData
+                }],
+                drilldown: { series: drilldownSeries }
+            });
+        });
     };
-    $scope.filteredSourceCountG = "";
     this.getSourceCount = function(forceApply=false) {
-        this.post("/domain/"+this.domain+"/sources/count", { filter: this.getGlobalFilter() }, function(data) {
-            $scope.filteredSourceCountG = data.count;
+        this.post("/domain/"+this.domain+"/sources/count", {}, function(data) {
+            $scope.filteredSourceCount = data.count;
             if (forceApply) $scope.$apply();
         }, true);
     };
@@ -108,25 +230,31 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
     $scope.topicLevel = "dictionary";
     $scope.topicFilter = {};
     $scope.totalMatchCount = "";
-    this.getTopicScores = function(ent) {
-        if (!ent) ent = this.currentEntity;
-        var c = $('#chart-topics-tree-small').highcharts();
+    $scope.topicChartType = 'line';
+    this.getTopicScores = function() {
+        
+        // first reset time chart
+        var c = $('#chart-topics-line-small').highcharts();
         if (c && c.series) {
             for (var i=0; i<c.series.length;i++) {
                 c.series[0].remove();
             }
         }
+        
         this.post("/domain/"+this.domain+"/matching/aggregate/"+$scope.topicLevel, 
-                  { filter: this.getEntityFilter(ent), topicFilter: $scope.topicFilter }, 
+                  { topicFilter: $scope.topicFilter }, 
                   function(data) {
             var agg = []; var total = 0; 
             for (var i = 0; i < data.scores.length; i++) {
+                var ts = $scope.getTopicSettings(data.scores[i].id, data.scores[i].name);
+                if (!ts.chart) continue;
                 agg.push({
                     id: data.scores[i].id,
                     name: data.scores[i].name,
                     value: data.scores[i].totalScore,
                     colorValue: data.scores[i].avgScore,
                     matchCount: data.scores[i].matchCount,
+                    color: ts.color,
                     events: { 
                         click: function(event) {
                             $scope.topicLevel = 'item';
@@ -141,9 +269,13 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
                 var timeSeriesData = [];
                 for (var j = 0; j < data.scores[i].detail.length; j++) {
                     var d = data.scores[i].detail[j].pubDate.split(':');
-                    timeSeriesData.push([Date.UTC(d[0],d[1],d[2],d[3]), data.scores[i].detail[j].matchCount]);
+                    timeSeriesData.push([Date.UTC(d[0],d[1]-1,d[2]-1,d[3]), data.scores[i].detail[j].matchCount]);
                 }
-                $('#chart-topics-tree-small').highcharts().addSeries({ name: data.scores[i].name, data: timeSeriesData});
+                $('#chart-topics-line-small').highcharts().addSeries({ 
+                    name: data.scores[i].name, 
+                    data: timeSeriesData, 
+                    color: ts.color
+                });
             }
             $scope.totalMatchCount = total;
             
@@ -170,7 +302,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
                 this.filter.dateFilter = null;
             }
         }
-        this.exploreEntity(null, false, true);
+        this.explore(null, true);
         $('#modal-filters').modal('hide');
         this.updateFilterBar();
     }
@@ -193,7 +325,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
             var b = $("<button>").attr("type","button").css('margin-left', '15px')
                     .addClass("btn btn-success").text(lbl);
             $("<span>").addClass("glyphicon glyphicon-remove")
-                    .attr("ng-click","console.log('ok'); ik.removeFilter('date');")
+                    .attr("ng-click","ik.removeFilter('date');")
                     .appendTo(b);
             b.appendTo('#filter-bar');
             
@@ -223,7 +355,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
             
             $compile(b)($scope);
         }
-    }
+    };
     this.removeFilter = function(name) {
         if (name == 'date') {
             delete this.filter.dateFilter;
@@ -232,10 +364,45 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
         } else if (name == 'topic') {
             delete this.filter.topic;
         }
-        this.exploreEntity(null, false, true);
+        this.explore(null, true);
         this.updateFilterBar();
+    };
+    this.filterEntity = function(ent) {
+        if (this.filter.entities && (this.filter.entities.length>0)) {
+            this.filter.entities.push(ent);
+        } else {
+            this.filter.entities = [ ent ];
+        }
+        this.updateFilterBar();
+        this.explore('');
+    };
+    
+    $scope.topicSettings = { topics: {}, hlMax: 0 };
+	/*this.initTopicSettings() = function() {
+        this.post("/domain/"+this.domain+"/matching/dictionaries", { includeItems: false }, function(data) {
+            for (var i = 0; i < data.dictionaries.length; i++) {
+                var d = data.dictionaries[i];
+                if (!$scope.topicSettings.highlight[d.id])
+                    $scope.topicSettings.highlight[d.id] = this.getNewColor();
+            }
+            if (forceApply) $scope.$apply();
+        }, true);
+    };*/
+    $scope.getTopicSettings = function(tid, tname) {
+        var ts = $scope.topicSettings.topics[tid];
+        if (!ts) {
+            ts = { 
+                id: tid, 
+                name: tname, 
+                color:  Highcharts.getOptions().colors[$scope.topicSettings.hlMax++],
+                highlight: true,
+                chart: true
+            };
+            $scope.topicSettings.topics[tid] = ts;
+        }
+        return ts;
     }
-	
+    
     
     // utility functions
     this.getGlobalFilter = function() {
@@ -251,7 +418,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
         }
         return (filters.length>0) ? { operator: "AND", filters: filters } : null;
     }
-    this.getEntityFilter = function(ent) {
+    /*this.getEntityFilter = function(ent) {
         var gf = this.getGlobalFilter();
         if (!ent) { return gf };
         var ef = { className: "%iKnow.Filters.ContainsEntityFilter", arguments: [ ent ] };
@@ -261,12 +428,40 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
         } else {
             return ef;
         }
-    }
+    }*/
     this.getHighlights = function() {
         var h = [];
-        if (this.currentEntity) h[h.length] = {"style": "<b>", "entities": [this.currentEntity]};
+        if (this.currentEntity) { 
+            h.push({"style": "<b>", "entities": [this.currentEntity]});
+        }
+        for (var i in $scope.topicSettings.topics) {
+            var ts = $scope.topicSettings.topics[i];
+            if (!ts.highlight) continue;
+            h.push({
+                dictionaries: [ ts.id ],
+                style: "<span class='ik-match ik-match-full ik-match-$$$DICTID' title=\"Full match for $$$ITEM in $$$DICT\">",
+                matchType: 'FULL'
+            });
+            h.push({
+                dictionaries: [ ts.id ],
+                style: "<span class='ik-match ik-match-partial ik-match-$$$DICTID' title=\"Partial match for $$$ITEM in $$$DICT\">",
+                matchType: 'PARTIAL'
+            });
+        }
         return h;
     }
+    $scope.applyHighlighting = function() {
+        for (var i in $scope.topicSettings.topics) {
+            var ts = $scope.topicSettings.topics[i];
+            $('.ik-match-'+ts.id).css('border-color', ts.color);
+            $('.ik-match-full.ik-match-'+ts.id).css('background-color', ts.color);
+            if (ts.name == 'Symbols') {
+                $('.ik-match-'+ts.id).css('cursor', 'pointer').click(function(e) {
+                    window.open('http://www.google.com/finance?q='+e.target.innerText, '_blank');
+                })
+            }
+        }
+    };
     
     this.post = function(path, reqObj, callback, customREST=false) {
         
@@ -282,6 +477,18 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
         if (!reqObj.filter) reqObj.filter = this.getGlobalFilter();
         reqObj.page = 1;
         reqObj.pageSize = pageSize;
+        reqObj.debug = true;
+        if (!reqObj.blacklists) {
+            var bl = [];
+            for (var i in $scope.blacklistSettings) {
+                if ($scope.blacklistSettings[i].enabled) {
+                    bl.push($scope.blacklistSettings[i].id);
+                }
+            }
+            if (bl.length > 0) {
+                reqObj.blacklists = bl;
+            }
+        }
         
         if (debug) console.log("POSTing to "+url, reqObj);
         
@@ -308,11 +515,14 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', function($
         this.namespace = location.href.split("/")[4]; // best guess
         if (debug) console.log("Assuming namespace is '"+this.namespace+"'");
     }
-    this.getEntities('', true); // init top entities
-    this.getSources(null, true); // init filtered source count
-    this.getSourceCount(true); // init filtered source count
-    this.getTopicScores();
     
+    $scope.blacklistSettings = [];
+    this.post("/domain/"+this.domain+"/blacklists", { includeDetails: false }, function(data) {
+        $scope.blacklistSettings = data.blacklists;
+        $scope.blacklistSettings.map(function(v) { v.enabled=true; return v; });
+        console.log($scope.blacklistSettings);
+        $('#go').click();
+    });
 }]);
 
 
@@ -342,6 +552,12 @@ $(document).ready(function() {
     $(".ik-resize-full").css("max-height", totalHeight+"px").css("height", totalHeight+"px");
     $(".ik-resize-panel").css("max-height", halfHeight+"px").css("height", halfHeight+"px");
     
+    // tab init
+    $('#modal-source-tabs a').click(function (e) {
+        e.preventDefault();
+        $(this).tab('show')
+    })
+    
     // datepicker init
     $('#input-filter-date-from').datetimepicker({language: 'en'});
     $('#input-filter-date-to').datetimepicker({language: 'en'});
@@ -368,7 +584,7 @@ $(document).ready(function() {
             data: []
         } ]
     });
-    /*var topicsTreeS = new Highcharts.Chart({
+    var topicsTreeS = new Highcharts.Chart({
         chart: { 
             type: 'treemap',
             layoutAlgorithm: 'squarified',
@@ -392,12 +608,12 @@ $(document).ready(function() {
             data: [],
             cursor: 'pointer'
         } ]
-    });*/
+    });
     var topicsTimeS = new Highcharts.Chart({
         chart: {
             type: 'line',
             zoomType: 'x',
-            renderTo: 'chart-topics-tree-small',
+            renderTo: 'chart-topics-line-small',
             marginLeft: 0,
             marginRight: 0,
             marginTop: 0
@@ -406,7 +622,7 @@ $(document).ready(function() {
         title: '',
         xAxis: {
             type: 'datetime',
-            min: Date.UTC(2016,9,12)
+            min: Date.UTC(2016,8,12)
         },
         yAxis: {
         },

@@ -14,6 +14,7 @@
 <script type="text/javascript" src="highcharts-4-2-6/js/highcharts.js"></script> 
 <script type="text/javascript" src="highcharts-4-2-6/js/modules/heatmap.js"></script> 
 <script type="text/javascript" src="highcharts-4-2-6/js/modules/treemap.js"></script> 
+<script type="text/javascript" src="highcharts-4-2-6/js/modules/drilldown.js"></script> 
 <script type="text/javascript" src="datetimepicker-0.0.11/js/bootstrap-datetimepicker.min.js"></script> 
 <script type="text/javascript" src="Explorer.js"></script>
 
@@ -79,6 +80,15 @@ body {
 .bootstrap-datetimepicker-widget ul {
 	padding: 0px;
 }
+
+.ik-match {
+	border: 2px solid;
+	border-radius: 3px;
+	padding: 1px 5px;
+}
+.ik-match-full {
+	color: white;
+}
 </style>
 
 </head>
@@ -93,20 +103,29 @@ body {
 <div class="input-group">
 <input type="text" class="form-control" ng-model="ik.currentEntity" placeholder="Entity" ng-keyup="ik.typeEntity($event)" />
 <span class="input-group-btn">
-<button class="btn btn-default" ng-click="ik.exploreEntity(ik.currentEntity, false)" >Go!</button>
+<button class="btn btn-default" ng-click="ik.exploreEntity(ik.currentEntity)" >Go!</button>
 </span>
+<button id="go" class="btn btn-default" ng-click="ik.explore(ik.currentEntity)" style="display: none;" >Go for all!</button>
 </div>
 </div>
 
-<div class="col-md-7">
+<div class="col-md-6">
 <div class="row">
-<button class="btn btn-default" onclick="$('#modal-filters').modal();">Global filters: <span class="badge">{{filteredSourceCountG}}</span></button>
+<!--button class="btn btn-default" onclick="$('#modal-filters').modal('show');">Global filters 
+  <span class="badge">{{filteredSourceCountG}}</span></button-->
 <span id="filter-bar"></span>
 </div>
 </div>
 
-<div class="col-md-1">
+<div class="col-md-2" align="right">
+<div class="btn-group" role="group">
+<button type="button" class="btn btn-default" onclick="$('#modal-filters').modal('show');">
+<span class="glyphicon glyphicon-filter" ></span>
+</button>
+<button type="button" class="btn btn-default" onclick="$('#modal-settings').modal('show');">
 <span class="glyphicon glyphicon-cog" ></span>
+</button>
+</div>
 </div>
 
 </div>
@@ -129,9 +148,10 @@ body {
   </div>
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <table class="table table-hover">
-      <tr ng-repeat="e in mainEntities" style="cursor: pointer;" ng-class="{'active': e.value == ik.currentEntity }" ng-click="ik.currentEntity=e.value; ik.exploreEntity(e.value);">
-        <td>{{e.value}}</td>
-        <td align="right">{{e.frequency}}</td>
+      <tr ng-repeat="e in mainEntities" ng-class="{'info': e.value == ik.currentEntity }">
+        <td style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);">{{e.value}}</td>
+        <td style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);" align="right">{{e.frequency}}</td>
+        <td width="30"><span class="glyphicon glyphicon-filter" ng-click="ik.filterEntity(e.value)"></span></td>
       </tr>
     </table>
   </div>
@@ -147,9 +167,11 @@ body {
   </div>
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <table class="table table-hover">
-      <tr ng-repeat="e in relEntities" style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);">
-        <td>{{e.value}}</td>
-        <td align="right">{{e.proximity}}</td>
+      <tr ng-repeat="e in relEntities">
+        <td style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);">{{e.value}}</td>
+        <td style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);" align="right">{{e.proximity}}</td>
+        <td width="30"><span class="glyphicon glyphicon-filter" ng-click="ik.filterEntity(e.value)"></span></td>
+        <td width="30"><span class="glyphicon glyphicon-road" ng-click="ik.getPaths(e.value)"></span></td>
       </tr>
     </table>
   </div>
@@ -165,7 +187,9 @@ body {
 <div id="main-view-sources" ng-show="ik.mode=='sources'">
 <div class="panel panel-success">
   <div class="panel-heading">
-    <h3 class="panel-title">Sources <span class="badge" title="{{filteredSourceCount}} sources">{{filteredSourceCountE}}</span></h3>
+    <h3 class="panel-title">Sources 
+      <span class="badge" title="{{filteredSourceCount}} sources">{{filteredSourceCount}}</span>
+    </h3>
   </div>
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <table class="table table-hover">
@@ -182,7 +206,10 @@ body {
 <div id="main-view-topics" ng-show="ik.mode=='topics'">
 <div class="panel panel-danger">
   <div class="panel-heading">
-    <h3 class="panel-title">Topics <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCountE}} sources">{{totalMatchCount}}</span></h3>
+    <h3 class="panel-title">Topics 
+      <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCount}} sources">{{totalMatchCount}}</span>
+      <span class="badge" title="Additional filter: also containing '{{ik.currentEntity}}'">containing '{{ik.currentEntity}}'</span>
+    </h3>
   </div>
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <div id="chart-topics-tree" class="ik-chart ik-resize-full" ></div>
@@ -211,9 +238,10 @@ body {
   </div>
   <div class="ik-resize-panel" style="overflow-y: scroll;">
     <table class="table table-hover">
-      <tr ng-repeat="e in mainEntities"  style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);" >
-        <td class="ik-truncate">{{e.value}}</td>
-        <td align="right">{{e.frequency}}</td>
+      <tr ng-repeat="e in mainEntities" >
+        <td class="ik-truncate" style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);">{{e.value}}</td>
+        <td align="right" style="cursor: pointer;" ng-click="ik.exploreEntity(e.value);">{{e.frequency}}</td>
+        <td width="30"><span class="glyphicon glyphicon-filter" ng-click="ik.filterEntity(e.value)"></span></td>
       </tr>
     </table>
   </div>
@@ -228,7 +256,7 @@ body {
 <div class="panel panel-sm panel-success">
   <div class="panel-heading">
     <h4 class="panel-title" ng-click="ik.mode='sources'" style="cursor: pointer;">Sources 
-      <span class="badge" title="based on {{filteredSourceCountE}} sources">{{filteredSourceCountE}}</span>
+      <span class="badge" title="based on {{filteredSourceCount}} sources">{{filteredSourceCount}}</span>
       <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='sources'"></span>
     </h4>
   </div>
@@ -251,13 +279,16 @@ body {
   <div class="panel-heading">
     <h4 class="panel-title">
       <span ng-click="ik.mode='topics'" style="cursor: pointer;">Topics</span>
-      <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCountE}} sources">{{totalMatchCount}}</span>
+      <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCount}} sources">{{totalMatchCount}}</span>
       <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='topics'"></span>
       <span id="chart-topics-tree-small-refresh" class="glyphicon glyphicon-refresh pull-right" style="margin-right: 5px;" ng-click="ik.getTopicScores();" ></span>
+      <span class="glyphicon glyphicon-signal pull-right" style="margin-right: 5px;" ng-click="topicChartType = 'line'" title="Switch to line chart" ng-show="topicChartType=='tree'" ></span>
+      <span class="glyphicon glyphicon-th-large pull-right" style="margin-right: 5px;" ng-click="topicChartType = 'tree'" title="Switch to tree map" ng-show="topicChartType=='line'" ></span>
     </h4>
   </div>
   <div class="ik-resize-panel" style="overflow-y: scroll;">
-    <div id="chart-topics-tree-small" class="ik-chart" ></div>
+    <div id="chart-topics-tree-small" class="ik-chart" ng-show="topicChartType=='tree'" ></div>
+    <div id="chart-topics-line-small" class="ik-chart" ng-show="topicChartType=='line'" ></div>
   </div>
 </div>
 </div>
@@ -269,25 +300,6 @@ body {
 </div>
 <!-- end of side panels -->
 
-
-<!-- source details popup -->
- <div id="modal-source" class="modal fade" role="dialog">
-   <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h4 class="modal-title">Record #{{ik.selectedSourceId}}</h4>
-      </div>
-      <div class="modal-body" style="overflow-y: scroll; padding: 15px;" class="ik-resize-full">
-        <div ng-bind-html="selectedSource.text"></div>
-      </div>
-      <div class="modal-footer">
-        <!-- TODO: summary function -->
-      </div>
-    </div>
-  </div>
-</div>
-<!-- end of source details popup -->
 
 
 
@@ -330,6 +342,103 @@ body {
           <button type="submit" class="btn btn-default" ng-click="$('#input-filter-date-from').setDate(null); $('#input-filter-date-from').setDate(null);">Reset</button>
           <button type="submit" class="btn btn-primary" ng-click="ik.saveFilterForm();">Save</button>
         </form>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of filter popup -->
+
+
+
+<!-- start of settings popup -->
+<div id="modal-settings" class="modal fade" role="dialog">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title">Settings</h4>
+      </div>
+      <div class="modal-body" style="overflow-y: scroll; padding: 15px;" class="ik-resize-full">
+        <h5>Colour scheme</h5>
+        <table class="table table-sm">
+          <tr><th>Dictionary</th><th>Color</th><th>Highlight</th><th>Chart</th></tr>
+          <tr ng-repeat="t in topicSettings.topics">
+            <td>{{t.name}}</td>
+            <td ng-style="{ 'background-color': t.color }">&nbsp;</td>
+            <td align="center"><input type="checkbox" ng-model="t.highlight" /></td>
+            <td align="center"><input type="checkbox" ng-model="t.chart" /></td>
+          </tr>
+        </table>
+        <h5>Blacklists</h5>
+        <div class="checkbox" ng-repeat="bl in blacklistSettings">
+          <label><input type="checkbox" ng-model="bl.enabled" />{{bl.name}}</label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- settings popup -->
+
+
+<!-- start of paths popup -->
+<div id="modal-paths" class="modal fade" role="dialog">
+  <div class="modal-dialog" width="80%">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title">Paths with {{pathEnts[0]}} and {{pathEnts[1]}}</h4>
+      </div>
+      <div class="modal-body" style="overflow-y: scroll;" class="ik-resize-full">
+        <table class="table table-hover">
+          <tr ng-repeat="p in paths">
+            <td ng-bind-html="p.str"></td>
+            <td width="30"><span class="glyphicon glyphicon-eye-open" ng-click="ik.showSource(p.sourceId)"></span></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of paths popup -->
+
+
+<!-- source details popup -->
+ <div id="modal-source" class="modal fade" role="dialog">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <!--button type="button" class="close" data-dismiss="modal">&times;</button-->
+        <h4 class="modal-title">Record #{{ik.selectedSourceId}}
+          <span class="glyphicon glyphicon-remove pull-right" onclick="$('#modal-source').modal('hide');" ></span>
+          <span class="glyphicon glyphicon-globe pull-right" id="modal-source-link" style="margin-right: 10px;" ></span>
+        </h4>
+      </div>
+      <div class="modal-body" style="overflow-y: scroll; padding: 15px;" class="ik-resize-full">
+        <ul class="nav nav-tabs" id="modal-source-tabs">
+          <li role="presentation"><a href="#modal-source-tab-text" data-toggle="tab" aria-expanded="true">Text</a></li>
+          <li role="presentation"><a href="#modal-source-tab-concepts" data-toggle="tab" aria-expanded="false">Concepts</a></li>
+          <li role="presentation"><a href="#modal-source-tab-topics" data-toggle="tab" aria-expanded="false">Topics</a></li>
+        </ul>
+        <div id="modal-source-content" class="tab-content" style="padding-top: 10px;">
+          <div class="tab-pane fade active in" id="modal-source-tab-text">
+            <div ng-bind-html="selectedSource.text"></div>
+          </div>
+          <div class="tab-pane fade" id="modal-source-tab-concepts">
+            <table class="table table-hover">
+              <tr><th>concept</th><th>dominance</th></tr>
+              <tr ng-repeat="c in selectedSource.entities">
+                <td>{{c.value}}</td>
+                <td align="right">{{c.dominance}}</td>
+              </tr>
+            </table>
+          </div>
+          <div class="tab-pane fade" id="modal-source-tab-topics">
+            <div id="chart-src-topics" class="ik-chart"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <!-- TODO: summary function -->
       </div>
     </div>
   </div>
