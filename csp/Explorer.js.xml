@@ -16,7 +16,8 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
 	this.currentEntity = '';
 	this.filter = {};
     
-    
+    this.entitiesTitleRelated = '';
+    this.entitiesTitleTop = '';
     $scope.mainEntities = [];
     this.getEntities = function(str, forceApply=true) {
         if ((str == null) || (str == '')) {
@@ -24,11 +25,13 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
                 $scope.mainEntities = data.entities;
                 if (forceApply) $scope.$apply();
             });
+            this.entitiesTitleTop = 'Top entities';
         } else {
             this.post("/domain/"+this.domain+"/entities/similar", { string: str }, function(data) { 
                 $scope.mainEntities = data.entities;
                 if (forceApply) $scope.$apply();
             });
+            this.entitiesTitleTop = "Similar entities for '"+str+"'";
         }
     };
     
@@ -36,12 +39,14 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
     this.getRelatedEntities = function(ent, forceApply=true) {
         if ((ent==null) || (ent=='')) {
             $scope.relEntities=[];
-            return;
+            this.entitiesTitleRelated =  '';
+        } else {
+            this.post("/domain/"+this.domain+"/entities/related", { entity: ent }, function(data) {
+                $scope.relEntities = data.entities;
+                if (forceApply) $scope.$apply();
+            });
+            this.entitiesTitleRelated = "Related entities for '"+ent+"'";
         }
-        this.post("/domain/"+this.domain+"/entities/related", { entity: ent }, function(data) {
-            $scope.relEntities = data.entities;
-            if (forceApply) $scope.$apply();
-        });
     };
     
     this.explore = function(ent, forceApply=true) {
@@ -202,7 +207,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
                 },
                 title: '',
                 legend: {
-                    enabled: true
+                    enabled: false
                 },
                 xAxis: {
                     type: 'category'
@@ -230,7 +235,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
     $scope.topicLevel = "dictionary";
     $scope.topicFilter = {};
     $scope.totalMatchCount = "";
-    $scope.topicChartType = 'line';
+    $scope.topicChartType = 'tree';
     this.getTopicScores = function() {
         
         // first reset time chart
@@ -266,16 +271,18 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
                 total += data.scores[i].matchCount;
                 
                 // and for the time graph
-                var timeSeriesData = [];
-                for (var j = 0; j < data.scores[i].detail.length; j++) {
-                    var d = data.scores[i].detail[j].pubDate.split(':');
-                    timeSeriesData.push([Date.UTC(d[0],d[1]-1,d[2]-1,d[3]), data.scores[i].detail[j].matchCount]);
+                if (data.scores[i].detail.length && data.scores[i].detail[0].pubDate) {
+	                var timeSeriesData = [];
+    	            for (var j = 0; j < data.scores[i].detail.length; j++) {
+        	            var d = data.scores[i].detail[j].pubDate.split(':');
+            	        timeSeriesData.push([Date.UTC(d[0],d[1]-1,d[2]-1,d[3]), data.scores[i].detail[j].matchCount]);
+                	}
+                	$('#chart-topics-line-small').highcharts().addSeries({ 
+	                    name: data.scores[i].name, 
+	                    data: timeSeriesData, 
+	                    color: ts.color
+	                });
                 }
-                $('#chart-topics-line-small').highcharts().addSeries({ 
-                    name: data.scores[i].name, 
-                    data: timeSeriesData, 
-                    color: ts.color
-                });
             }
             $scope.totalMatchCount = total;
             
@@ -326,6 +333,7 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
                     .addClass("btn btn-success").text(lbl);
             $("<span>").addClass("glyphicon glyphicon-remove")
                     .attr("ng-click","ik.removeFilter('date');")
+                    .css("margin-left", "10px")
                     .appendTo(b);
             b.appendTo('#filter-bar');
             
@@ -335,9 +343,10 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
         // entity
         if (this.filter.entities) {
             var b = $("<button>").attr("type","button").css('margin-left', '15px')
-                    .addClass("btn btn-primary").text("Contains: "+this.filter.entities.join(','));
+                    .addClass("btn btn-primary").text("Contains: '"+this.filter.entities.join("','")+"'");
             $("<span>").addClass("glyphicon glyphicon-remove")
                     .attr("ng-click","console.log('ok'); ik.removeFilter('entity');")
+                    .css("margin-left", "10px")
                     .appendTo(b);
             b.appendTo('#filter-bar');
             
@@ -347,9 +356,10 @@ ikApp.controller('iKnowController', ['$scope', '$filter', '$compile', '$sce', fu
         // topic
         if (this.filter.topic) {
             var b = $("<button>").attr("type","button").css('margin-left', '15px')
-                    .addClass("btn btn-danger").text("Topic: "+this.filter.topic);
+                    .addClass("btn btn-danger").text("Topic: '"+this.filter.topic+"'");
             $("<span>").addClass("glyphicon glyphicon-remove")
                     .attr("ng-click","console.log('ok'); ik.removeFilter('topic');")
+                    .css("margin-left", "10px")
                     .appendTo(b);
             b.appendTo('#filter-bar');
             
@@ -621,8 +631,7 @@ $(document).ready(function() {
         legend: { enabled: false },
         title: '',
         xAxis: {
-            type: 'datetime',
-            min: Date.UTC(2016,8,12)
+            type: 'datetime'
         },
         yAxis: {
         },

@@ -52,12 +52,17 @@
 		set tPackage = ##class(%iKnow.Domain).%OpenId(pDomainId).GetParameter($$$IKPPACKAGE)
 		set tPackage = $tr(tPackage,".","_")
 		
+		set tHasPublicationDate = ##class(%Dictionary.PropertyDefinition).%ExistsId(tPackage_".Source||PublicationDate")
+		
 		if pLevel="dictionary" {
 			set tSQL = "SELECT DictionaryId As ID, Dictionary->Name As Name"
 		} else {
 			set tSQL = "SELECT DictionaryItemId AS ID, DictionaryItem->Name As Name"
 		}
-		set tSQL = tSQL_", TO_CHAR(Source->PublicationDate,'YYYY:MM:DD:HH24') PublicationDate, SUM(Score) TotalScore, AVG(Score) AvgScore, COUNT(*) MatchCount FROM "_tPackage_".DictionaryMatch"
+		if tHasPublicationDate {
+			set tSQL = tSQL_", TO_CHAR(Source->PublicationDate,'YYYY:MM:DD:HH24') PublicationDate"
+		}
+		set tSQL = tSQL_", SUM(Score) TotalScore, AVG(Score) AvgScore, COUNT(*) MatchCount FROM "_tPackage_".DictionaryMatch"
 		set tSQL = tSQL_" WHERE SourceID %FIND Demo_Explorer.Find("_pDomainId_",'"_$s($isobject(tFilter):$replace(tFilter.ToString(),"'","''"), 1:"")_"')"
 		
 		if $isobject(%request.Content.topicFilter) {
@@ -84,7 +89,7 @@
 		} else {
 			set tSQL = tSQL_" GROUP BY DictionaryItemId"
 		}
-		set tSQL = tSQL_", Source->PublicationDate"
+		set:tHasPublicationDate tSQL = tSQL_", Source->PublicationDate"
 		if pLevel="dictionary" {
 			set tSQL = tSQL_" ORDER BY DictionaryId"
 		} else {
@@ -111,10 +116,11 @@
 			}
 			set tData.totalScore = tData.totalScore+tSQLResult.%Get("TotalScore")
 			set tData.matchCount = tData.matchCount+tSQLResult.%Get("MatchCount")
-			do tData.detail.%Push({ "pubDate": ((tSQLResult.%Get("PublicationDate"))), 
-									"totalScore": (+$fnumber(tSQLResult.%Get("TotalScore"),"",2)), 
-									"avgScore": (+$fnumber(tSQLResult.%Get("AvgScore"),"",2)), 
-									"matchCount": (tSQLResult.%Get("MatchCount"))})
+			set tEntry = { "totalScore": (+$fnumber(tSQLResult.%Get("TotalScore"),"",2)), 
+							"avgScore": (+$fnumber(tSQLResult.%Get("AvgScore"),"",2)), 
+							"matchCount": (tSQLResult.%Get("MatchCount"))}
+			set:tHasPublicationDate tEntry.pubDate = tSQLResult.%Get("PublicationDate")
+			do tData.detail.%Push(tEntry)
 		}
 		if (tPrevID) {
 			set tData.totalScore = +$fnumber(tData.totalScore,"",2)

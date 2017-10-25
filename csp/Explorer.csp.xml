@@ -60,6 +60,12 @@ body {
   text-overflow: ellipsis;
 }
 
+.panel-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .ik-chart {
   margin: 0px;
   min-height: 150px;
@@ -144,7 +150,7 @@ body {
 <div id="panel-main-entities" class="col-md-6" style="padding-left: 0px;">
 <div class="panel panel-primary">
   <div class="panel-heading">
-    <h3 class="panel-title">Entities</h3>
+    <h3 class="panel-title">{{ik.entitiesTitleTop}} &nbsp;</h3>
   </div>
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <table class="table table-hover">
@@ -163,7 +169,7 @@ body {
 <div id="panel-rel-entities" class="col-md-6" style="padding-right: 0px;">
 <div class="panel panel-primary">
   <div class="panel-heading">
-    <h3 class="panel-title">Related entities</h3>
+    <h3 class="panel-title">{{ik.entitiesTitleRelated}} &nbsp;</h3>
   </div>
   <div class="ik-resize-full" style="overflow-y: scroll;">
     <table class="table table-hover">
@@ -281,9 +287,10 @@ body {
       <span ng-click="ik.mode='topics'" style="cursor: pointer;">Topics</span>
       <span class="badge" title="{{totalMatchCount}} topic matches in {{filteredSourceCount}} sources">{{totalMatchCount}}</span>
       <span class="glyphicon glyphicon-fullscreen pull-right" ng-click="ik.mode='topics'"></span>
-      <span id="chart-topics-tree-small-refresh" class="glyphicon glyphicon-refresh pull-right" style="margin-right: 5px;" ng-click="ik.getTopicScores();" ></span>
+      <span id="chart-topics-tree-small-refresh" class="glyphicon glyphicon-refresh pull-right" style="margin-right: 5px; display: none;" ng-click="ik.getTopicScores();" ></span>
       <span class="glyphicon glyphicon-signal pull-right" style="margin-right: 5px;" ng-click="topicChartType = 'line'" title="Switch to line chart" ng-show="topicChartType=='tree'" ></span>
       <span class="glyphicon glyphicon-th-large pull-right" style="margin-right: 5px;" ng-click="topicChartType = 'tree'" title="Switch to tree map" ng-show="topicChartType=='line'" ></span>
+      <span class="glyphicon glyphicon-chevron-left pull-right" style="margin-right: 5px;" ng-click="topicLevel = 'dictionary'; topicFilter={}; ik.getTopicScores();" title="Return to dictionary level" ng-show="(topicChartType=='tree')&&(topicLevel=='item')" ></span>
     </h4>
   </div>
   <div class="ik-resize-panel" style="overflow-y: scroll;">
@@ -391,8 +398,8 @@ body {
       <div class="modal-body" style="overflow-y: scroll;" class="ik-resize-full">
         <table class="table table-hover">
           <tr ng-repeat="p in paths">
-            <td ng-bind-html="p.str"></td>
-            <td width="30"><span class="glyphicon glyphicon-eye-open" ng-click="ik.showSource(p.sourceId)"></span></td>
+            <td ng-bind-html="p.str" style="line-height: 2;"></td>
+            <td width="30" style="vertical-align: middle;"><span class="glyphicon glyphicon-eye-open" ng-click="ik.showSource(p.sourceId)"></span></td>
           </tr>
         </table>
       </div>
@@ -415,7 +422,7 @@ body {
       </div>
       <div class="modal-body" style="overflow-y: scroll; padding: 15px;" class="ik-resize-full">
         <ul class="nav nav-tabs" id="modal-source-tabs">
-          <li role="presentation"><a href="#modal-source-tab-text" data-toggle="tab" aria-expanded="true">Text</a></li>
+          <li role="presentation" class="active"><a href="#modal-source-tab-text" data-toggle="tab" aria-expanded="true">Text</a></li>
           <li role="presentation"><a href="#modal-source-tab-concepts" data-toggle="tab" aria-expanded="false">Concepts</a></li>
           <li role="presentation"><a href="#modal-source-tab-topics" data-toggle="tab" aria-expanded="false">Topics</a></li>
         </ul>
@@ -433,7 +440,7 @@ body {
             </table>
           </div>
           <div class="tab-pane fade" id="modal-source-tab-topics">
-            <div id="chart-src-topics" class="ik-chart"></div>
+            <div id="chart-src-topics" class="ik-chart" style="width: 500px; height: 300px;"></div>
           </div>
         </div>
       </div>

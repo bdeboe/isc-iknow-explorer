@@ -16,5 +16,6 @@
 <cspapp>/nglib/angular.min.js.map
 <cspapp>/nglib/jquery-3.1.0.min.js
 <cspapp>/nglib/jquery-3.1.0.min.map
+Demo.Explorer.FilterToSQL.cls
 Demo.Explorer.RestHandler.cls
 Demo.Explorer.Utils.cls
